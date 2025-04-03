@@ -1,33 +1,36 @@
 <?php
 session_start();
-if (!isset($_SESSION['user_email']) || $_SESSION['user_type'] !== "patient") {
-    header("Location: index.html");
+
+// Ensure user is logged in and is a Patient
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_type']) || $_SESSION['user_type'] != 'Patient') {
+    header("Location: login.php");
     exit();
 }
 
+// Ensure session variables are set
+$patient_name = isset($_SESSION['name']) ? $_SESSION['name'] : "Unknown";
+$patient_email = isset($_SESSION['email']) ? $_SESSION['email'] : "Unknown";
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $email = $_SESSION['user_email'];
-    $symptoms = implode(", ", $_POST['symptoms']); // Convert array to string
+    $symptoms = isset($_POST['symptoms']) ? $_POST['symptoms'] : [];
 
-    // Database connection
-    $conn = new mysqli("localhost", "root", "", "healthcare_db");
-
-    if ($conn->connect_error) {
-        die("Connection failed: " . $conn->connect_error);
+    // Include "Other symptoms" if provided
+    if (!empty($_POST['other_symptoms'])) {
+        $symptoms[] = htmlspecialchars($_POST['other_symptoms']); // Prevent XSS
     }
 
-    // Insert or update patient symptoms
-    $sql = "INSERT INTO patients (name, email, symptoms) 
-            VALUES ('".$_SESSION['user_name']."', '$email', '$symptoms') 
-            ON DUPLICATE KEY UPDATE symptoms='$symptoms'";
+    if (!empty($symptoms)) {
+        // Format data
+        $data = "$patient_name ($patient_email) reported: " . implode(", ", $symptoms) . "\n";
 
-    if ($conn->query($sql) === TRUE) {
-        echo "Symptoms submitted successfully. <a href='patient_home.php'>Go Back</a>";
+        // Save symptoms to a file (or you can save it to the database)
+        file_put_contents("patients_symptoms.txt", $data, FILE_APPEND | LOCK_EX);
+
+        echo "Symptoms submitted successfully! <a href='patient_home.php'>Go Back</a>";
+        exit();
     } else {
-        echo "Error: " . $conn->error;
+        echo "<p style='color:red;'>Please select at least one symptom or enter an 'Other' symptom.</p>";
     }
-
-    $conn->close();
 }
 ?>
 
@@ -36,17 +39,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Patient Problem</title>
+    <title>Select Symptoms</title>
 </head>
 <body>
-    <h2>Select Your Symptoms</h2>
-    <form method="POST">
-        <input type="checkbox" name="symptoms[]" value="Cough"> Cough<br>
-        <input type="checkbox" name="symptoms[]" value="Fever"> Fever<br>
-        <input type="checkbox" name="symptoms[]" value="Cold"> Cold<br>
-        <input type="checkbox" name="symptoms[]" value="BP"> High Blood Pressure (BP)<br>
-        <input type="checkbox" name="symptoms[]" value="Sugar"> Diabetes (Sugar)<br>
-        <input type="checkbox" name="symptoms[]" value="Other"> Other<br><br>
+    <h2>Welcome, <?php echo htmlspecialchars($patient_name); ?>!</h2>
+    <h3>Select Your Symptoms</h3>
+    <form action="" method="POST">
+        <label><input type="checkbox" name="symptoms[]" value="Cough"> Cough</label><br>
+        <label><input type="checkbox" name="symptoms[]" value="Cold"> Cold</label><br>
+        <label><input type="checkbox" name="symptoms[]" value="Diabetes"> Diabetes</label><br>
+        <label><input type="checkbox" name="symptoms[]" value="BP"> High Blood Pressure (BP)</label><br>
+        <label><input type="checkbox" name="symptoms[]" value="Heart Pain"> Heart Pain</label><br>
+
+        <label>Other symptoms:</label>
+        <input type="text" name="other_symptoms" placeholder="Enter other symptoms"><br><br>
 
         <button type="submit">Submit</button>
     </form>
